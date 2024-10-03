@@ -2,12 +2,13 @@ import gzip
 import mimetypes
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from io import BytesIO, UnsupportedOperation
 from time import time
 
 import magic
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files import File
 from django.core.files.storage import Storage
@@ -363,10 +364,19 @@ class SwiftStorage(Storage):
     def size(self, name):
         return int(self.get_headers(name)['content-length'])
 
+    def _datetime_from_timestamp(self, ts):
+        """
+        If timezone support is enabled, make an aware datetime object in UTC;
+        otherwise make a naive one in the local timezone.
+        """
+        tz = timezone.utc if settings.USE_TZ else None
+        return datetime.fromtimestamp(ts, tz=tz)
+
     @prepend_name_prefix
-    def modified_time(self, name):
-        return datetime.fromtimestamp(
-            float(self.get_headers(name)['x-timestamp']))
+    def get_modified_time(self, name):
+        return self._datetime_from_timestamp(
+            float(self.get_headers(name)['x-timestamp'])
+        )
 
     @prepend_name_prefix
     def url(self, name):
